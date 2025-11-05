@@ -1,22 +1,31 @@
+# -----------------------------------------------
+# Servidor Flask IoT - Recibe datos desde ESP32
+# y permite consulta por Streamlit
+# -----------------------------------------------
 from flask import Flask, request, jsonify
-from flask_cors import CORS  # permite peticiones desde otros dispositivos (como la ESP32)
+from flask_cors import CORS
+import csv
+import os
+from datetime import datetime
 
 app = Flask(__name__)
-CORS(app)  # habilita CORS para todos los orígenes
+CORS(app)  # permite acceso desde Streamlit u otras apps
 
-# Lista global para guardar las lecturas recibidas
-lecturas = []
+DATA_FILE = "lecturas.csv"
+
+# Crear archivo CSV si no existe
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["fecha", "temperatura", "humedad", "humo_detectado"])
 
 
 @app.route('/')
 def home():
     return """
-    <h1>Servidor IoT activo ✅</h1>
-    <p>Bienvenido, la API está lista para recibir y consultar datos.</p>
-    <ul>
-        <li><b>POST /datos</b> → para enviar lecturas desde la ESP32.</li>
-        <li><b>GET /lecturas</b> → para ver las lecturas recibidas.</li>
-    </ul>
+    <h2>🔥 Servidor IoT Activo ✅</h2>
+    <p>Usa el endpoint <b>/datos</b> (POST) para enviar lecturas desde la ESP32.</p>
+    <p>Y el endpoint <b>/ultimos</b> (GET) para ver los datos recientes.</p>
     """
 
 
@@ -28,33 +37,45 @@ def recibir_datos():
         if not data:
             return jsonify({"error": "No se recibieron datos"}), 400
 
-        temperatura = data.get('temperatura')
-        humedad = data.get('humedad')
+        temperatura = data.get("temperatura")
+        humedad = data.get("humedad")
+        humo = data.get("humo_detectado")
 
-        lectura = {"temperatura": temperatura, "humedad": humedad}
-        lecturas.append(lectura)  # Guarda la lectura en la lista
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        print(f"📡 Datos recibidos -> Temperatura: {temperatura}°C | Humedad: {humedad}%")
+        print(f"📡 {fecha} -> T={temperatura}°C | H={humedad}% | Humo={humo}")
+
+        # Guardar en archivo CSV
+        with open(DATA_FILE, "a", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([fecha, temperatura, humedad, humo])
 
         return jsonify({
             "mensaje": "Datos recibidos correctamente",
-            "lectura": lectura
+            "fecha": fecha,
+            "temperatura": temperatura,
+            "humedad": humedad,
+            "humo_detectado": humo
         }), 200
 
     except Exception as e:
-        print("❌ Error al procesar datos:", e)
+        print("❌ Error:", e)
         return jsonify({"error": str(e)}), 500
 
 
-@app.route('/lecturas', methods=['GET'])
-def obtener_lecturas():
-    """Devuelve todas las lecturas almacenadas en formato JSON"""
-    return jsonify({
-        "cantidad": len(lecturas),
-        "lecturas": lecturas
-    }), 200
+@app.route('/ultimos', methods=['GET'])
+def ultimos_datos():
+    """ Devuelve las últimas lecturas guardadas """
+    datos = []
+    try:
+        with open(DATA_FILE, "r") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                datos.append(row)
+        return jsonify(datos[-20:])  # muestra los últimos 20 registros
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == '__main__':
-    # Ejecuta el servidor en todas las direcciones disponibles (0.0.0.0) en el puerto 5000
     app.run(host='0.0.0.0', port=5000)
