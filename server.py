@@ -17,7 +17,7 @@ DATA_FILE = "lecturas.csv"
 if not os.path.exists(DATA_FILE):
     with open(DATA_FILE, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["fecha", "temperatura", "humedad", "humo_detectado"])
+        writer.writerow(["fecha", "humo_detectado"])
 
 
 @app.route('/')
@@ -36,25 +36,21 @@ def recibir_datos():
 
         if not data:
             return jsonify({"error": "No se recibieron datos"}), 400
-
-        temperatura = data.get("temperatura")
-        humedad = data.get("humedad")
+            
         humo = data.get("humo_detectado")
 
         fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        print(f"📡 {fecha} -> T={temperatura}°C | H={humedad}% | Humo={humo}")
+        print(f"📡 {fecha} -> Humo={humo}")
 
         # Guardar en archivo CSV
         with open(DATA_FILE, "a", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([fecha, temperatura, humedad, humo])
+            writer.writerow([fecha, humo])
 
         return jsonify({
             "mensaje": "Datos recibidos correctamente",
             "fecha": fecha,
-            "temperatura": temperatura,
-            "humedad": humedad,
             "humo_detectado": humo
         }), 200
 
